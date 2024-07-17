@@ -31,7 +31,7 @@ See also [`DavisYin`](@ref).
 # References
 1. Davis, Yin. "A Three-Operator Splitting Scheme and its Optimization Applications", Set-Valued and Variational Analysis, vol. 25, no. 4, pp. 829-858 (2017).
 """
-Base.@kwdef struct DavisYinIteration{R,C<:Union{R,Complex{R}},T<:AbstractArray{C},Tf,Tg,Th}
+Base.@kwdef struct DavisYinIteration{R,C<:Union{R,Complex{R}},T<:AbstractArray{C},Tf,Tg,Th,E}
     f::Tf = Zero()
     g::Tg = Zero()
     h::Th = Zero()
@@ -40,6 +40,7 @@ Base.@kwdef struct DavisYinIteration{R,C<:Union{R,Complex{R}},T<:AbstractArray{C
     Lf::Maybe{R} = nothing
     gamma::Maybe{R} =
         Lf !== nothing ? (1 / Lf) : error("You must specify either Lf or gamma")
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:DavisYinIteration}) = Base.IsInfinite()
@@ -56,7 +57,7 @@ end
 function Base.iterate(iter::DavisYinIteration)
     z = copy(iter.x0)
     xg, = prox(iter.g, z, iter.gamma)
-    f_xg, grad_f_xg = value_and_gradient(iter.f, xg)
+    f_xg, grad_f_xg = value_and_gradient(iter.f, xg, iter.extras)
     z_half = 2 .* xg .- z .- iter.gamma .* grad_f_xg
     xh, = prox(iter.h, z_half, iter.gamma)
     res = xh - xg
@@ -67,7 +68,7 @@ end
 
 function Base.iterate(iter::DavisYinIteration, state::DavisYinState)
     prox!(state.xg, iter.g, state.z, iter.gamma)
-    f_xg, grad_f_xg = value_and_gradient(iter.f, state.xg)
+    f_xg, grad_f_xg = value_and_gradient(iter.f, state.xg, iter.extras)
     state.grad_f_xg .= grad_f_xg
     state.z_half .= 2 .* state.xg .- state.z .- iter.gamma .* state.grad_f_xg
     prox!(state.xh, iter.h, state.z_half, iter.gamma)

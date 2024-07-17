@@ -37,7 +37,7 @@ See also: [`ZeroFPR`](@ref).
 # References
 1. Themelis, Stella, Patrinos, "Forward-backward envelope for the sum of two nonconvex functions: Further properties and nonmonotone line-search algorithms", SIAM Journal on Optimization, vol. 28, no. 3, pp. 2274-2303 (2018).
 """
-Base.@kwdef struct ZeroFPRIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D}
+Base.@kwdef struct ZeroFPRIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D,E}
     f::Tf = Zero()
     A::TA = I
     g::Tg = Zero()
@@ -50,6 +50,7 @@ Base.@kwdef struct ZeroFPRIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D}
     minimum_gamma::R = real(eltype(x0))(1e-7)
     max_backtracks::Int = 20
     directions::D = LBFGS(5)
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:ZeroFPRIteration}) = Base.IsInfinite()
@@ -85,7 +86,7 @@ f_model(iter::ZeroFPRIteration, state::ZeroFPRState) =
 function Base.iterate(iter::ZeroFPRIteration{R}) where {R}
     x = copy(iter.x0)
     Ax = iter.A * x
-    f_Ax, grad_f_Ax = value_and_gradient(iter.f, Ax)
+    f_Ax, grad_f_Ax = value_and_gradient(iter.f, Ax, iter.extras)
     gamma =
         iter.gamma === nothing ?
         iter.alpha / lower_bound_smoothness_constant(iter.f, iter.A, x, grad_f_Ax) :
@@ -165,7 +166,7 @@ function Base.iterate(iter::ZeroFPRIteration{R}, state::ZeroFPRState) where {R}
         f_Axbar_upp, f_Axbar
     else
         mul!(state.Axbar, iter.A, state.xbar)
-        f_Axbar, grad_f_Axbar = value_and_gradient(iter.f, state.Axbar)
+        f_Axbar, grad_f_Axbar = value_and_gradient(iter.f, state.Axbar, iter.extras)
         state.grad_f_Axbar .= grad_f_Axbar
         f_model(iter, state), f_Axbar
     end
@@ -201,7 +202,7 @@ function Base.iterate(iter::ZeroFPRIteration{R}, state::ZeroFPRState) where {R}
         state.x .= state.xbar_prev .+ state.tau .* state.d
         state.Ax .= state.Axbar .+ state.tau .* state.Ad
         # TODO: can precompute most of next line in case f is quadratic
-        state.f_Ax, grad_f_Ax = value_and_gradient(iter.f, state.Ax)
+        state.f_Ax, grad_f_Ax = value_and_gradient(iter.f, state.Ax, iter.extras)
         state.grad_f_Ax .= grad_f_Ax
         mul!(state.At_grad_f_Ax, iter.A', state.grad_f_Ax)
         state.y .= state.x .- state.gamma .* state.At_grad_f_Ax

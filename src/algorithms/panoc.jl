@@ -36,7 +36,7 @@ See also: [`PANOC`](@ref).
 # References
 1. Stella, Themelis, Sopasakis, Patrinos, "A simple and efficient algorithm for nonlinear model predictive control", 56th IEEE Conference on Decision and Control (2017).
 """
-Base.@kwdef struct PANOCIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D}
+Base.@kwdef struct PANOCIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D,E}
     f::Tf = Zero()
     A::TA = I
     g::Tg = Zero()
@@ -49,6 +49,7 @@ Base.@kwdef struct PANOCIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D}
     minimum_gamma::R = real(eltype(x0))(1e-7)
     max_backtracks::Int = 20
     directions::D = LBFGS(5)
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:PANOCIteration}) = Base.IsInfinite()
@@ -87,7 +88,7 @@ f_model(iter::PANOCIteration, state::PANOCState) =
 function Base.iterate(iter::PANOCIteration{R}) where {R}
     x = copy(iter.x0)
     Ax = iter.A * x
-    f_Ax, grad_f_Ax = value_and_gradient(iter.f, Ax)
+    f_Ax, grad_f_Ax = value_and_gradient(iter.f, Ax, iter.extras)
     gamma =
         iter.gamma === nothing ?
         iter.alpha / lower_bound_smoothness_constant(iter.f, iter.A, x, grad_f_Ax) :
@@ -181,7 +182,7 @@ function Base.iterate(iter::PANOCIteration{R,Tx,Tf}, state::PANOCState) where {R
 
     state.x_d .= state.x .+ state.d
     state.Ax_d .= state.Ax .+ state.Ad
-    state.f_Ax_d, grad_f_Ax_d = value_and_gradient(iter.f, state.Ax_d)
+    state.f_Ax_d, grad_f_Ax_d = value_and_gradient(iter.f, state.Ax_d, iter.extras)
     state.grad_f_Ax_d .= grad_f_Ax_d
     mul!(state.At_grad_f_Ax_d, adjoint(iter.A), state.grad_f_Ax_d)
 
@@ -219,7 +220,7 @@ function Base.iterate(iter::PANOCIteration{R,Tx,Tf}, state::PANOCState) where {R
             # along a line using interpolation and linear combinations
             # this allows saving operations
             if isinf(f_Az)
-                f_Az, grad_f_Az = value_and_gradient(iter.f, state.Az)
+                f_Az, grad_f_Az = value_and_gradient(iter.f, state.Az, iter.extras)
                 state.grad_f_Az .= grad_f_Az
             end
             if isinf(c)
@@ -238,7 +239,7 @@ function Base.iterate(iter::PANOCIteration{R,Tx,Tf}, state::PANOCState) where {R
         else
             # otherwise, in the general case where f is only smooth, we compute
             # one gradient and matvec per backtracking step
-            state.f_Ax, grad_f_Ax = value_and_gradient(iter.f, state.Ax)
+            state.f_Ax, grad_f_Ax = value_and_gradient(iter.f, state.Ax, iter.extras)
             state.grad_f_Ax .= grad_f_Ax
             mul!(state.At_grad_f_Ax, adjoint(iter.A), state.grad_f_Ax)
         end

@@ -31,7 +31,7 @@ See also: [`LiLin`](@ref).
 # References
 1. Li, Lin, "Accelerated Proximal Gradient Methods for Nonconvex Programming", Proceedings of NIPS 2015 (2015).
 """
-Base.@kwdef struct LiLinIteration{R,C<:Union{R,Complex{R}},Tx<:AbstractArray{C},Tf,Tg}
+Base.@kwdef struct LiLinIteration{R,C<:Union{R,Complex{R}},Tx<:AbstractArray{C},Tf,Tg,E}
     f::Tf = Zero()
     g::Tg = Zero()
     x0::Tx
@@ -40,6 +40,7 @@ Base.@kwdef struct LiLinIteration{R,C<:Union{R,Complex{R}},Tx<:AbstractArray{C},
     adaptive::Bool = false
     delta::R = real(eltype(x0))(1e-3)
     eta::R = real(eltype(x0))(0.8)
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:LiLinIteration}) = Base.IsInfinite()
@@ -62,7 +63,7 @@ end
 
 function Base.iterate(iter::LiLinIteration{R}) where {R}
     y = copy(iter.x0)
-    f_y, grad_f_y = value_and_gradient(iter.f, y)
+    f_y, grad_f_y = value_and_gradient(iter.f, y, iter.extras)
 
     # TODO: initialize gamma if not provided
     # TODO: authors suggest Barzilai-Borwein rule?
@@ -109,7 +110,7 @@ function Base.iterate(iter::LiLinIteration{R}, state::LiLinState{R,Tx}) where {R
     else
         # TODO: re-use available space in state?
         # TODO: backtrack gamma at x
-        f_x, grad_f_x = value_and_gradient(iter.f, x)
+        f_x, grad_f_x = value_and_gradient(iter.f, x, iter.extras)
         x_forward = state.x - state.gamma .* grad_f_x
         v, g_v = prox(iter.g, x_forward, state.gamma)
         Fv = iter.f(v) + g_v
@@ -128,7 +129,7 @@ function Base.iterate(iter::LiLinIteration{R}, state::LiLinState{R,Tx}) where {R
         Fx = Fv
     end
 
-    state.f_y, grad_f_y = value_and_gradient(iter.f, state.y)
+    state.f_y, grad_f_y = value_and_gradient(iter.f, state.y, iter.extras)
     state.grad_f_y .= grad_f_y
     state.y_forward .= state.y .- state.gamma .* state.grad_f_y
     state.g_z = prox!(state.z, iter.g, state.y_forward, state.gamma)

@@ -31,13 +31,21 @@ Return a tuple containing the value of `f` at `x` and the gradient of `f` at `x`
 """
 value_and_gradient
 
-function value_and_gradient(f::AutoDifferentiable, x)
-    return DifferentiationInterface.value_and_gradient(f.f, f.backend, x)
+value_and_gradient(f, x, extras) = value_and_gradient(f, x)
+
+function value_and_gradient(f::AutoDifferentiable, x, maybe_extras...)
+    return DifferentiationInterface.value_and_gradient(f.f, f.backend, x, maybe_extras...)
 end
 
 function value_and_gradient(f::ProximalCore.Zero, x)
     return f(x), zero(x)
 end
+
+function prepare_gradient(f::AutoDifferentiable, x)
+    return DifferentiationInterface.prepare_gradient(f.f, f.backend, x)
+end
+
+prepare_gradient(f, x) = nothing
 
 # various utilities
 

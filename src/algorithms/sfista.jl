@@ -38,12 +38,13 @@ See also: [`SFISTA`](@ref).
 4. Kong, W., Melo, J. G., & Monteiro, R. D. (2021). FISTA and Extensions - Review and New Insights. arXiv preprint arXiv:2107.01267.
 5. Florea, M. I. (2018). Constructing Accelerated Algorithms for Large-scale Optimization-Framework, Algorithms, and Applications.
 """
-Base.@kwdef struct SFISTAIteration{R,C<:Union{R,Complex{R}},Tx<:AbstractArray{C},Tf,Th}
+Base.@kwdef struct SFISTAIteration{R,C<:Union{R,Complex{R}},Tx<:AbstractArray{C},Tf,Th,E}
     x0::Tx
     f::Tf = Zero()
     g::Th = Zero()
     Lf::R
     mf::R = real(eltype(Lf))(0.0)
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:SFISTAIteration}) = Base.IsInfinite()
@@ -71,7 +72,7 @@ function Base.iterate(
     state.a = (state.τ + sqrt(state.τ^2 + 4 * state.τ * state.APrev)) / 2
     state.A = state.APrev + state.a
     state.xt .= (state.APrev / state.A) .* state.yPrev + (state.a / state.A) .* state.xPrev
-    f_xt, gradf_xt = value_and_gradient(iter.f, state.xt)
+    f_xt, gradf_xt = value_and_gradient(iter.f, state.xt, iter.extras)
     state.gradf_xt .= gradf_xt
     λ2 = state.λ / (1 + state.λ * iter.mf)
     # FISTA acceleration steps.
@@ -97,7 +98,7 @@ function check_sc(state::SFISTAState, iter::SFISTAIteration, tol, termination_ty
     else
         # Classic (approximate) first-order stationary point [4]. The main inclusion is: r ∈ ∇f(y) + ∂h(y).
         λ2 = state.λ / (1 + state.λ * iter.mf)
-        f_y, gradf_y = value_and_gradient(iter.f, state.y)
+        f_y, gradf_y = value_and_gradient(iter.f, state.y, iter.extras)
         r = gradf_y - state.gradf_xt + (state.xt - state.y) / λ2
         res = norm(r)
     end

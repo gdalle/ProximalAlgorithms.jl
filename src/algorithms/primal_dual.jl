@@ -77,7 +77,7 @@ See also: [`AFBA`](@ref).
 3. Condat, "A primal-dual splitting method for convex optimization involving Lipschitzian, proximable and linear composite terms", Journal of Optimization Theory and Applications, vol. 158, no. 2, pp 460-479 (2013).
 4. Vũ, "A splitting algorithm for dual monotone inclusions involving cocoercive operators", Advances in Computational Mathematics, vol. 38, no. 3, pp. 667-681 (2013).
 """
-Base.@kwdef struct AFBAIteration{R,Tx,Ty,Tf,Tg,Th,Tl,TL,Tbetaf,Tbetal,Ttheta,Tmu,Tlambda}
+Base.@kwdef struct AFBAIteration{R,Tx,Ty,Tf,Tg,Th,Tl,TL,Tbetaf,Tbetal,Ttheta,Tmu,Tlambda,E}
     f::Tf = Zero()
     g::Tg = Zero()
     h::Th = Zero()
@@ -108,6 +108,7 @@ Base.@kwdef struct AFBAIteration{R,Tx,Ty,Tf,Tg,Th,Tl,TL,Tbetaf,Tbetal,Ttheta,Tmu
         T = real(eltype(x0))
         AFBA_default_stepsizes(L, h, T(theta), T(mu), T(beta_f), T(beta_l))
     end
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:AFBAIteration}) = Base.IsInfinite()
@@ -175,7 +176,7 @@ function Base.iterate(
     state::AFBAState = AFBAState(x = copy(iter.x0), y = copy(iter.y0)),
 )
     # perform xbar-update step
-    f_x, gradf = value_and_gradient(iter.f, state.x)
+    f_x, gradf = value_and_gradient(iter.f, state.x, iter.extras)
     state.gradf .= gradf
     mul!(state.temp_x, iter.L', state.y)
     state.temp_x .+= state.gradf
@@ -184,7 +185,7 @@ function Base.iterate(
     prox!(state.xbar, iter.g, state.temp_x, iter.gamma[1])
 
     # perform ybar-update step
-    lc_y, gradl = value_and_gradient(convex_conjugate(iter.l), state.y)
+    lc_y, gradl = value_and_gradient(convex_conjugate(iter.l), state.y, iter.extras)
     state.gradl .= gradl
     state.temp_x .= iter.theta .* state.xbar .+ (1 - iter.theta) .* state.x
     mul!(state.temp_y, iter.L, state.temp_x)

@@ -41,7 +41,7 @@ See also: [`FastForwardBackward`](@ref).
 1. Tseng, "On Accelerated Proximal Gradient Methods for Convex-Concave Optimization" (2008).
 2. Beck, Teboulle, "A Fast Iterative Shrinkage-Thresholding Algorithm for Linear Inverse Problems", SIAM Journal on Imaging Sciences, vol. 2, no. 1, pp. 183-202 (2009).
 """
-Base.@kwdef struct FastForwardBackwardIteration{R,Tx,Tf,Tg,TLf,Tgamma,Textr}
+Base.@kwdef struct FastForwardBackwardIteration{R,Tx,Tf,Tg,TLf,Tgamma,Textr,E}
     f::Tf = Zero()
     g::Tg = Zero()
     x0::Tx
@@ -53,6 +53,7 @@ Base.@kwdef struct FastForwardBackwardIteration{R,Tx,Tf,Tg,TLf,Tgamma,Textr}
     reduce_gamma::R = real(eltype(x0))(0.5)
     increase_gamma::R = real(eltype(x0))(1.0)
     extrapolation_sequence::Textr = nothing
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:FastForwardBackwardIteration}) = Base.IsInfinite()
@@ -72,7 +73,7 @@ end
 
 function Base.iterate(iter::FastForwardBackwardIteration)
     x = copy(iter.x0)
-    f_x, grad_f_x = value_and_gradient(iter.f, x)
+    f_x, grad_f_x = value_and_gradient(iter.f, x, iter.extras)
     gamma =
         iter.gamma === nothing ?
         1 / lower_bound_smoothness_constant(iter.f, I, x, grad_f_x) : iter.gamma
@@ -135,7 +136,7 @@ function Base.iterate(
     state.x .= state.z .+ beta .* (state.z .- state.z_prev)
     state.z_prev, state.z = state.z, state.z_prev
 
-    state.f_x, grad_f_x = value_and_gradient(iter.f, state.x)
+    state.f_x, grad_f_x = value_and_gradient(iter.f, state.x, iter.extras)
     state.grad_f_x .= grad_f_x
     state.y .= state.x .- state.gamma .* state.grad_f_x
     state.g_z = prox!(state.z, iter.g, state.y, state.gamma)

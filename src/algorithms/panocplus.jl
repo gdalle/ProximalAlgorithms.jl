@@ -36,7 +36,7 @@ See also: [`PANOCplus`](@ref).
 # References
 1. De Marchi, Themelis, "Proximal Gradient Algorithms under Local Lipschitz Gradient Continuity", Journal of Optimization Theory and Applications, vol. 194, no. 3, pp. 771-794 (2022).
 """
-Base.@kwdef struct PANOCplusIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D}
+Base.@kwdef struct PANOCplusIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D,E}
     f::Tf = Zero()
     A::TA = I
     g::Tg = Zero()
@@ -49,6 +49,7 @@ Base.@kwdef struct PANOCplusIteration{R,Tx,Tf,TA,Tg,TLf,Tgamma,D}
     minimum_gamma::R = real(eltype(x0))(1e-7)
     max_backtracks::Int = 20
     directions::D = LBFGS(5)
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:PANOCplusIteration}) = Base.IsInfinite()
@@ -80,7 +81,7 @@ f_model(iter::PANOCplusIteration, state::PANOCplusState) =
 function Base.iterate(iter::PANOCplusIteration{R}) where {R}
     x = copy(iter.x0)
     Ax = iter.A * x
-    f_Ax, grad_f_Ax = value_and_gradient(iter.f, Ax)
+    f_Ax, grad_f_Ax = value_and_gradient(iter.f, Ax, iter.extras)
     gamma =
         iter.gamma === nothing ?
         iter.alpha / lower_bound_smoothness_constant(iter.f, iter.A, x, grad_f_Ax) :
@@ -121,7 +122,7 @@ function Base.iterate(iter::PANOCplusIteration{R}) where {R}
         )
     else
         mul!(state.Az, iter.A, state.z)
-        f_Az, grad_f_Az = value_and_gradient(iter.f, state.Az)
+        f_Az, grad_f_Az = value_and_gradient(iter.f, state.Az, iter.extras)
         state.grad_f_Az = grad_f_Az
     end
     mul!(state.At_grad_f_Az, adjoint(iter.A), state.grad_f_Az)
@@ -197,7 +198,7 @@ function Base.iterate(iter::PANOCplusIteration{R}, state::PANOCplusState) where 
         end
 
         mul!(state.Ax, iter.A, state.x)
-        state.f_Ax, grad_f_Ax = value_and_gradient(iter.f, state.Ax)
+        state.f_Ax, grad_f_Ax = value_and_gradient(iter.f, state.Ax, iter.extras)
         state.grad_f_Ax .= grad_f_Ax
         mul!(state.At_grad_f_Ax, adjoint(iter.A), state.grad_f_Ax)
 
@@ -208,7 +209,7 @@ function Base.iterate(iter::PANOCplusIteration{R}, state::PANOCplusState) where 
         f_Az_upp = f_model(iter, state)
 
         mul!(state.Az, iter.A, state.z)
-        f_Az, grad_f_Az = value_and_gradient(iter.f, state.Az)
+        f_Az, grad_f_Az = value_and_gradient(iter.f, state.Az, iter.extras)
         state.grad_f_Az .= grad_f_Az
         if (iter.gamma === nothing || iter.adaptive == true)
             tol = 10 * eps(R) * (1 + abs(f_Az))

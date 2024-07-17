@@ -35,7 +35,7 @@ See also: [`ForwardBackward`](@ref).
 1. Lions, Mercier, “Splitting algorithms for the sum of two nonlinear operators,” SIAM Journal on Numerical Analysis, vol. 16, pp. 964–979 (1979).
 2. De Marchi, Themelis, "An interior proximal gradient method for nonconvex optimization," arXiv:2208.00799v2 (2024).
 """
-Base.@kwdef struct ForwardBackwardIteration{R,Tx,Tf,Tg,TLf,Tgamma}
+Base.@kwdef struct ForwardBackwardIteration{R,Tx,Tf,Tg,TLf,Tgamma,E}
     f::Tf = Zero()
     g::Tg = Zero()
     x0::Tx
@@ -45,6 +45,7 @@ Base.@kwdef struct ForwardBackwardIteration{R,Tx,Tf,Tg,TLf,Tgamma}
     minimum_gamma::R = real(eltype(x0))(1e-7)
     reduce_gamma::R = real(eltype(x0))(0.5)
     increase_gamma::R = real(eltype(x0))(1.0)
+    extras::E = prepare_gradient(f, x0)
 end
 
 Base.IteratorSize(::Type{<:ForwardBackwardIteration}) = Base.IsInfinite()
@@ -64,7 +65,7 @@ end
 
 function Base.iterate(iter::ForwardBackwardIteration)
     x = copy(iter.x0)
-    f_x, grad_f_x = value_and_gradient(iter.f, x)
+    f_x, grad_f_x = value_and_gradient(iter.f, x, iter.extras)
     gamma =
         iter.gamma === nothing ?
         1 / lower_bound_smoothness_constant(iter.f, I, x, grad_f_x) : iter.gamma
@@ -110,7 +111,7 @@ function Base.iterate(
         state.grad_f_x, state.grad_f_z = state.grad_f_z, state.grad_f_x
     else
         state.x, state.z = state.z, state.x
-        state.f_x, grad_f_x = value_and_gradient(iter.f, state.x)
+        state.f_x, grad_f_x = value_and_gradient(iter.f, state.x, iter.extras)
         state.grad_f_x .= grad_f_x
     end
 
